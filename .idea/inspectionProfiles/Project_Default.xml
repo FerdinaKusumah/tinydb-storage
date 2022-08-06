@@ -1,0 +1,74 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="DuplicatedCode" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <Languages>
+        <language minSize="762" name="Python" />
+      </Languages>
+    </inspection_tool>
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="39">
+            <item index="0" class="java.lang.String" itemvalue="geopy" />
+            <item index="1" class="java.lang.String" itemvalue="celery" />
+            <item index="2" class="java.lang.String" itemvalue="pymongo" />
+            <item index="3" class="java.lang.String" itemvalue="python-dateutil" />
+            <item index="4" class="java.lang.String" itemvalue="python-dotenv" />
+            <item index="5" class="java.lang.String" itemvalue="pytz" />
+            <item index="6" class="java.lang.String" itemvalue="redis" />
+            <item index="7" class="java.lang.String" itemvalue="spacy" />
+            <item index="8" class="java.lang.String" itemvalue="pandas" />
+            <item index="9" class="java.lang.String" itemvalue="scipy" />
+            <item index="10" class="java.lang.String" itemvalue="elasticsearch" />
+            <item index="11" class="java.lang.String" itemvalue="PyYAML" />
+            <item index="12" class="java.lang.String" itemvalue="numpy" />
+            <item index="13" class="java.lang.String" itemvalue="PyJWT" />
+            <item index="14" class="java.lang.String" itemvalue="motor" />
+            <item index="15" class="java.lang.String" itemvalue="oss2" />
+            <item index="16" class="java.lang.String" itemvalue="sanic" />
+            <item index="17" class="java.lang.String" itemvalue="cachetools" />
+            <item index="18" class="java.lang.String" itemvalue="sanic_compress" />
+            <item index="19" class="java.lang.String" itemvalue="uuid" />
+            <item index="20" class="java.lang.String" itemvalue="sanic-openapi" />
+            <item index="21" class="java.lang.String" itemvalue="sanic-validation" />
+            <item index="22" class="java.lang.String" itemvalue="mysqlclient" />
+            <item index="23" class="java.lang.String" itemvalue="graphdb" />
+            <item index="24" class="java.lang.String" itemvalue="pydantic" />
+            <item index="25" class="java.lang.String" itemvalue="boto3" />
+            <item index="26" class="java.lang.String" itemvalue="Flask" />
+            <item index="27" class="java.lang.String" itemvalue="fastapi" />
+            <item index="28" class="java.lang.String" itemvalue="scikit-learn" />
+            <item index="29" class="java.lang.String" itemvalue="graphdb-module" />
+            <item index="30" class="java.lang.String" itemvalue="scikit-learn-extra" />
+            <item index="31" class="java.lang.String" itemvalue="ingestor-module" />
+            <item index="32" class="java.lang.String" itemvalue="kombu" />
+            <item index="33" class="java.lang.String" itemvalue="Sastrawi" />
+            <item index="34" class="java.lang.String" itemvalue="nltk" />
+            <item index="35" class="java.lang.String" itemvalue="offline-model-builder" />
+            <item index="36" class="java.lang.String" itemvalue="offline-results-module" />
+            <item index="37" class="java.lang.String" itemvalue="tqdm" />
+            <item index="38" class="java.lang.String" itemvalue="offline-rce-results-module" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N802" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="fastapi.requests.config" />
+          <option value="sanic.app.config" />
+          <option value="mysql.connector.connect.cursor" />
+          <option value="psycopg2.pool.ThreadedConnectionPool.cursor" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>

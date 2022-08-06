@@ -1,0 +1,5 @@
+tinydb>=4.5.0
+redis>=4.0.0
+pydantic>=1.5
+cachetools>=4.2.0
+boto3>=1.24.18
