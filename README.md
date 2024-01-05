@@ -6,7 +6,7 @@ extension based on my case only.
 
 ## Installation
 ```shell
-pip install tinydb-storage
+pip install tinydbstorage
 ```
 
 ## Storage extension to use Tinydb
@@ -55,7 +55,7 @@ from tinydb import TinyDB, Query
 
 from tinydbstorage.storage import RedisStorage
 
-db = TinyDB(storage=RedisStorage, redis_uri="redis://:rahasia@localhost:6379/0")
+db = TinyDB(storage=RedisStorage, redis_uri="redis://:secret@localhost:6379/0")
 
 def insert_data():
     resp = requests.get("https://jsonplaceholder.typicode.com/users")
@@ -71,11 +71,11 @@ from tinydbstorage.schema import S3ConfigSchema
 from tinydbstorage.storage import S3Storage
 
 config = S3ConfigSchema.parse_obj({
-    "aws_bucket_name": "foo",
-    "aws_file_path": "foo/bar/baz.json",
-    "aws_region_name": "ap-southeast-1",
-    "aws_access_key_id": "foobar",
-    "aws_secret_access_key": "foobar",
+    "bucket_name": "foo",
+    "file_path": "foo/bar/baz.json",
+    "region_name": "ap-southeast-1",
+    "access_key_id": "foobar",
+    "secret_access_key": "foobar",
 })
 
 db = TinyDB(storage=S3Storage, config=config)

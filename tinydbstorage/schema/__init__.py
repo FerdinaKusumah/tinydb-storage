@@ -1,1 +1,1 @@
-from tinydbstorage.schema.s3_schema import S3ConfigSchema
+from tinydbstorage.schema.s3 import S3Schema
