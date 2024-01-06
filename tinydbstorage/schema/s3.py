@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class S3Schema(BaseModel):
@@ -19,7 +19,7 @@ class S3Schema(BaseModel):
 
     file_path: str
     bucket_name: str
-    region_name: str
+    region_name: str = Field(default="ap-southeast-1")
     access_key_id: str
     secret_access_key: str
 
@@ -29,8 +29,8 @@ class S3Schema(BaseModel):
         file_path: str,
         bucket_name: str,
         region_name: str,
-        access_key: str,
-        secret_key: str,
+        access_key_id: str,
+        secret_access_key: str,
     ) -> "S3Schema":
         """
         Create an instance of S3Schema from individual parameters.
@@ -41,10 +41,10 @@ class S3Schema(BaseModel):
         :type bucket_name: str
         :param region_name: The AWS region of the S3 bucket.
         :type region_name: str
-        :param access_key: The AWS access key ID for authentication.
-        :type access_key: str
-        :param secret_key: The AWS secret access key for authentication.
-        :type secret_key: str
+        :param access_key_id: The AWS access key ID for authentication.
+        :type access_key_id: str
+        :param secret_access_key: The AWS secret access key for authentication.
+        :type secret_access_key: str
 
         :return: An instance of S3Schema.
         :rtype: S3Schema
@@ -53,6 +53,6 @@ class S3Schema(BaseModel):
             file_path=file_path,
             bucket_name=bucket_name,
             region_name=region_name,
-            access_key_id=access_key,
-            secret_access_key=secret_key,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
         )

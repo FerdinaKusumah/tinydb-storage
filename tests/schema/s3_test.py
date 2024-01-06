@@ -35,8 +35,8 @@ class TestS3Schema(unittest.TestCase):
             file_path=file_path,
             bucket_name=bucket_name,
             region_name=region_name,
-            access_key=access_key,
-            secret_key=secret_key,
+            access_key_id=access_key,
+            secret_access_key=secret_key,
         )
 
         self.assertEqual(s3_schema.file_path, file_path)

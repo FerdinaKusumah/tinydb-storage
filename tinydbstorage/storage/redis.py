@@ -1,5 +1,4 @@
 import json
-from collections import defaultdict
 from typing import Optional, Dict, Any
 
 import redis
@@ -51,6 +50,7 @@ class RedisStorage(Storage):
 
         :seealso: https://redis-py.readthedocs.io/
         """
+        self.prefix = kwargs.get("prefix", "tiny_db")
         self.connection = redis.client.StrictRedis(
             connection_pool=redis.ConnectionPool.from_url(redis_uri), **kwargs
         )
@@ -62,11 +62,11 @@ class RedisStorage(Storage):
         :return: Dictionary data from Redis storage.
         :rtype: Dict[str, Any]
         """
-        tmp = {}
-        for key in self.connection.scan_iter("*"):
-            tmp[key.decode("utf-8")] = json.loads(self.connection.get(key))
-
-        return tmp
+        try:
+            resp = self.connection.get(self.prefix)
+            return json.loads(resp)
+        except Exception:
+            return {}
 
     def write(self, data: Dict[str, Dict[str, Any]]):
         """
@@ -78,9 +78,7 @@ class RedisStorage(Storage):
         :return: None
         :rtype: None
         """
-        for k, v in data.items():
-            self.connection.set(k, json.dumps(v))
-
+        self.connection.set(self.prefix, json.dumps(data))
         return None
 
     def close(self):

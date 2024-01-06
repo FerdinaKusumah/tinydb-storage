@@ -30,7 +30,6 @@ class TestRedisStorage(unittest.TestCase):
         self.db.storage.connection = mock_strict_redis.return_value
 
         # Mock the scan_iter and get methods
-        mock_strict_redis.return_value.scan_iter.return_value = []
         mock_strict_redis.return_value.get.return_value = None
 
         # Read data from an empty Redis storage
@@ -47,7 +46,6 @@ class TestRedisStorage(unittest.TestCase):
         data_to_write = {"key1": {"value": "A"}, "key2": {"value": "B"}}
 
         # Mock the scan_iter and get methods
-        mock_strict_redis.return_value.scan_iter.return_value = ["1".encode("utf-8")]
         mock_strict_redis.return_value.get.return_value = json.dumps(data_to_write)
 
         # Write data to Redis storage
@@ -57,7 +55,7 @@ class TestRedisStorage(unittest.TestCase):
         data_read = self.db.storage.read()
 
         # Check if the read data matches the data written
-        self.assertEqual(data_read, {"1": data_to_write})
+        self.assertEqual(data_read, data_to_write)
 
     @patch("tinydbstorage.storage.redis.redis.client.StrictRedis")
     def test_redisstorage_close(self, mock_strict_redis):

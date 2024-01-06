@@ -13,8 +13,8 @@ prerelease:
 release:
 	poetry version patch
 
-test-publish:
-	poetry publish --build -r test-pypi
+build:
+	poetry build
 
 publish:
 	poetry publish --build --skip-existing
