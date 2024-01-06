@@ -1,7 +1,9 @@
-import unittest
-from unittest.mock import patch, Mock
 import json
-from tinydb import TinyDB, Query
+import unittest
+from unittest.mock import patch
+
+from tinydb import TinyDB
+
 from tinydbstorage.storage.redis import RedisStorage
 
 

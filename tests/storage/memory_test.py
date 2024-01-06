@@ -1,5 +1,7 @@
 import unittest
+
 from tinydb import TinyDB, Query
+
 from tinydbstorage.storage import MemoryStorage
 
 

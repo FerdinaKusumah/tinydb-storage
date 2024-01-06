@@ -1,10 +1,12 @@
+import json
 import unittest
 from unittest.mock import MagicMock, patch
-import json
-from tinydb import TinyDB
-from tinydbstorage.storage import S3Storage
-from tinydbstorage.schema import S3Schema
+
 from botocore.exceptions import ClientError
+from tinydb import TinyDB
+
+from tinydbstorage.schema import S3Schema
+from tinydbstorage.storage import S3Storage
 
 
 class TestS3Storage(unittest.TestCase):
