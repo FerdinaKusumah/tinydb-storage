@@ -67,16 +67,16 @@ def insert_data():
 ```python
 import requests
 from tinydb import TinyDB, Query
-from tinydbstorage.schema import S3ConfigSchema
+from tinydbstorage.schema import S3Schema
 from tinydbstorage.storage import S3Storage
 
-config = S3ConfigSchema.parse_obj({
-    "bucket_name": "foo",
-    "file_path": "foo/bar/baz.json",
-    "region_name": "ap-southeast-1",
-    "access_key_id": "foobar",
-    "secret_access_key": "foobar",
-})
+config = S3Schema.from_param(
+    bucket_name="foo",
+    file_path="foo/bar/baz.json",
+    region_name="ap-southeast-1",
+    access_key_id="bar",
+    secret_access_key="secretkey",
+)
 
 db = TinyDB(storage=S3Storage, config=config)
 
