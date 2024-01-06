@@ -59,7 +59,7 @@ class TestFileStorage(unittest.TestCase):
 
         # Update the existing data
         updated_data = {"key": "new_value"}
-        self.db.update(updated_data)
+        self.db.update(updated_data, query.key == "value")
 
         # Check if the data is updated correctly
         result = self.db.all()
