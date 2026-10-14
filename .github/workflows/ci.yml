@@ -1,0 +1,48 @@
+name: TinyDB Storage CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ develop ]
+
+jobs:
+  test:
+    name: Py ${{ matrix.python }} / TinyDB ${{ matrix.tinydb }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        tinydb: ["4.9.0"]
+        include:
+          # The oldest TinyDB the package allows
+          - python: "3.10"
+            tinydb: "4.8.0"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        id: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install Poetry
+        # Poetry runs on the runner's Python; only the project uses the matrix one.
+        run: pipx install poetry==1.8.4
+
+      - name: Install dependencies
+        run: |
+          poetry env use "${{ steps.python.outputs.python-path }}"
+          poetry install --all-extras
+          poetry run pip install "tinydb==${{ matrix.tinydb }}"
+
+      - name: ⚙️ Run Black Linter Check
+        run: poetry run black --check .
+
+      - name: 🧪 Run Unit Tests
+        run: make test
