@@ -1,75 +1,67 @@
 # tinydb-storage
 
-Tiny db storage extension, this is an unofficial from [tinydb](https://github.com/msiemens/tinydb). I'm creating this
-extension based on my case only.
+[![CI](https://github.com/FerdinaKusumah/tinydb-storage/actions/workflows/ci.yml/badge.svg)](https://github.com/FerdinaKusumah/tinydb-storage/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/tinydbstorage.svg)](https://pypi.org/project/tinydbstorage/)
+[![Python](https://img.shields.io/pypi/pyversions/tinydbstorage.svg)](https://pypi.org/project/tinydbstorage/)
 
+> **Note:** this is an independent project. It is not an official TinyDB package and is not affiliated with or endorsed
+> by the TinyDB project or its maintainers.
+
+Storage extensions for [TinyDB](https://github.com/msiemens/tinydb). Keep a TinyDB database in **Redis** or **S3**
+(including S3-compatible services such as MinIO and Cloudflare R2) instead of a local file.
+
+Both storages keep the whole database as one JSON value, like TinyDB's own `JSONStorage`, and they never silently lose
+data:
+
+* A failed read raises the error. It is never mistaken for an empty database, so the next write can't replace your data.
+* A write fails with `StorageConflictError` when another process changed the database after this one read it, instead of
+  overwriting that change. Redis uses `WATCH`, S3 uses conditional writes (`If-Match` / `If-None-Match`).
 
 ## Installation
+
+Install the extra for the storage you use:
+
 ```shell
-pip install tinydbstorage
+pip install "tinydbstorage[redis]"   # RedisStorage
+pip install "tinydbstorage[s3]"      # S3Storage
+pip install "tinydbstorage[all]"     # both
 ```
 
-## Storage extension to use Tinydb
-
-* Memory storage
-* File storage
-* Redis storage
-* S3 storage
-
-## Memory storage example
-
-```python
-import requests
-from tinydb import TinyDB, Query
-from tinydbstorage.storage import MemoryStorage
-
-db = TinyDB(storage=MemoryStorage)
-
-def insert_data():
-    resp = requests.get("https://jsonplaceholder.typicode.com/users")
-    db.table("users").insert_multiple(resp.json())
-```
-
-## File storage example
-
-```python
-import os
-
-import requests
-from tinydb import TinyDB, Query
-from tinydbstorage.storage import FileStorage
-
-db_path = os.path.join(os.path.dirname(__file__), "db.json")
-db = TinyDB(path=db_path, storage=FileStorage)
-
-def insert_data():
-    resp = requests.get("https://jsonplaceholder.typicode.com/users")
-    db.table("users").insert_multiple(resp.json())
-```
+Requires Python 3.10+ and TinyDB 4.8+.
 
 ## Redis storage example
 
 ```python
-import requests
 from tinydb import TinyDB, Query
-
 from tinydbstorage.storage import RedisStorage
 
 db = TinyDB(storage=RedisStorage, redis_uri="redis://:secret@localhost:6379/0")
-
-def insert_data():
-    resp = requests.get("https://jsonplaceholder.typicode.com/users")
-    db.table("users").insert_multiple(resp.json())
+db.table("users").insert({"name": "John"})
+db.table("users").search(Query().name == "John")
 ```
+
+Options:
+
+* `key`: the Redis key holding the database. Default `tiny_db`.
+* `client`: an existing `redis.Redis` client instead of `redis_uri`. It is left open when the database closes.
+* Any other keyword argument goes to `redis.Redis.from_url`, for example `socket_timeout=5`.
 
 ## S3 storage example
 
 ```python
-import requests
-from tinydb import TinyDB, Query
-from tinydbstorage.schema import S3Schema
+from tinydb import TinyDB
+from tinydbstorage import S3Schema
 from tinydbstorage.storage import S3Storage
 
+config = S3Schema(bucket_name="foo", file_path="foo/bar/baz.json", region_name="ap-southeast-1")
+db = TinyDB(storage=S3Storage, config=config)
+db.table("users").insert({"name": "John"})
+```
+
+Credentials are optional. Left out, boto3 uses its default chain: environment variables, `~/.aws` config, or the
+instance/task role. To pass them explicitly:
+
+```python
 config = S3Schema.from_param(
     bucket_name="foo",
     file_path="foo/bar/baz.json",
@@ -77,21 +69,60 @@ config = S3Schema.from_param(
     access_key_id="bar",
     secret_access_key="secretkey",
 )
-
-db = TinyDB(storage=S3Storage, config=config)
-
-def insert_data():
-    resp = requests.get("https://jsonplaceholder.typicode.com/users")
-    db.table("users").insert_multiple(resp.json())
 ```
+
+For MinIO, Cloudflare R2 and other S3-compatible services, set `endpoint_url`:
+
+```python
+config = S3Schema(bucket_name="foo", file_path="db.json", endpoint_url="http://localhost:9000")
+```
+
+You can also pass your own boto3 S3 client with `client=`.
+
+## Concurrent writers
+
+Two processes can share one database. If one writes after the other read, the second write raises
+`StorageConflictError` and nothing is overwritten. Retry the operation, which reads the latest data first:
+
+```python
+from tinydbstorage import StorageConflictError
+
+try:
+    db.insert({"name": "John"})
+except StorageConflictError:
+    db.insert({"name": "John"})
+```
+
+If your service doesn't support conditional writes, or you want the old last-write-wins behaviour, pass
+`check_conflicts=False` to the storage.
+
+## Upgrading from 0.1
+
+* Install the extra you need (`tinydbstorage[redis]` or `[s3]`). Redis and boto3 are no longer installed by default, and
+  pydantic and python-dateutil are no longer dependencies.
+* Read errors are raised instead of returning an empty database, and conflicting writes raise `StorageConflictError`.
+* `RedisStorage(prefix=...)` still works and sets the key; prefer `key=`.
+* `S3Schema` is a frozen dataclass. `S3Schema(...)` and `S3Schema.from_param(...)` work as before, and the credentials
+  are now optional.
+* `MemoryStorage` and `FileStorage` are deprecated, because TinyDB ships them: use `tinydb.storages.MemoryStorage` and
+  `tinydb.storages.JSONStorage`.
+
+## Development
+
+```shell
+make install   # poetry install --all-extras
+make test      # pytest with coverage
+make format    # black
+```
+
+The tests run against in-process fakes (fakeredis and moto), so no Redis server or AWS account is needed.
 
 ## Help & Bugs
 
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-blue.svg)](https://github.com/FerdinaKusumah/tinydb-storage/issues)
 
 If you are still confused or found a bug,
-please [open the issue](https://github.com/FerdinaKusumah/tinydb-storage/issues). All bug reports are appreciated, some
-features have not been tested yet due to lack of free time.
+please [open the issue](https://github.com/FerdinaKusumah/tinydb-storage/issues). All bug reports are appreciated.
 
 ## License
 
