@@ -1,51 +1,49 @@
-import unittest
+import dataclasses
 
-from tinydbstorage.schema import S3Schema
+import pytest
+
+from tinydbstorage import S3Schema
 
 
-class TestS3Schema(unittest.TestCase):
-    def test_s3schema_creation(self):
-        file_path = "test/path"
-        bucket_name = "test-bucket"
-        region_name = "us-east-1"
-        access_key = "your-access-key"
-        secret_key = "your-secret-key"
-
-        s3_schema = S3Schema(
-            file_path=file_path,
-            bucket_name=bucket_name,
-            region_name=region_name,
-            access_key_id=access_key,
-            secret_access_key=secret_key,
+class TestS3Schema:
+    def test_from_param_keeps_the_0_1_signature(self) -> None:
+        schema = S3Schema.from_param(
+            file_path="a/b.json",
+            bucket_name="bucket",
+            region_name="us-east-1",
+            access_key_id="key",
+            secret_access_key="secret",
+        )
+        assert schema == S3Schema(
+            file_path="a/b.json",
+            bucket_name="bucket",
+            region_name="us-east-1",
+            access_key_id="key",
+            secret_access_key="secret",
         )
 
-        self.assertEqual(s3_schema.file_path, file_path)
-        self.assertEqual(s3_schema.bucket_name, bucket_name)
-        self.assertEqual(s3_schema.region_name, region_name)
-        self.assertEqual(s3_schema.access_key_id, access_key)
-        self.assertEqual(s3_schema.secret_access_key, secret_key)
+    def test_credentials_are_optional(self) -> None:
+        assert S3Schema(file_path="a.json", bucket_name="bucket").client_kwargs() == {
+            "region_name": "ap-southeast-1"
+        }
 
-    def test_s3schema_from_param(self):
-        file_path = "test/path"
-        bucket_name = "test-bucket"
-        region_name = "us-east-1"
-        access_key = "your-access-key"
-        secret_key = "your-secret-key"
-
-        s3_schema = S3Schema.from_param(
-            file_path=file_path,
-            bucket_name=bucket_name,
-            region_name=region_name,
-            access_key_id=access_key,
-            secret_access_key=secret_key,
+    def test_client_kwargs_carry_every_set_field(self) -> None:
+        schema = S3Schema.from_param(
+            file_path="a.json",
+            bucket_name="bucket",
+            access_key_id="key",
+            secret_access_key="secret",
+            session_token="token",
+            endpoint_url="https://r2.example",
         )
+        assert schema.client_kwargs() == {
+            "region_name": "ap-southeast-1",
+            "aws_access_key_id": "key",
+            "aws_secret_access_key": "secret",
+            "aws_session_token": "token",
+            "endpoint_url": "https://r2.example",
+        }
 
-        self.assertEqual(s3_schema.file_path, file_path)
-        self.assertEqual(s3_schema.bucket_name, bucket_name)
-        self.assertEqual(s3_schema.region_name, region_name)
-        self.assertEqual(s3_schema.access_key_id, access_key)
-        self.assertEqual(s3_schema.secret_access_key, secret_key)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_is_immutable(self) -> None:
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            S3Schema(file_path="a.json", bucket_name="bucket").bucket_name = "other"  # type: ignore[misc]

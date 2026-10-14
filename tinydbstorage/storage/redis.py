@@ -1,91 +1,81 @@
 import json
-from typing import Optional, Dict, Any
+from typing import Any, Optional, Union
 
 import redis
 from tinydb.storages import Storage
 
+from tinydbstorage.constants import DEFAULT_REDIS_KEY
+from tinydbstorage.errors import StorageConflictError
+
+JsonData = dict[str, dict[str, Any]]
+_UNREAD = object()
+
 
 class RedisStorage(Storage):
-    """
-    Represents a storage implementation for TinyDB using Redis.
+    """TinyDB storage that keeps the whole database as one JSON value in Redis.
 
-    This class extends the `Storage` class from the TinyDB library.
+    Read errors are raised, never read as an empty database, and a write fails
+    with StorageConflictError when another writer changed the key since this
+    storage last read it (`check_conflicts=False` restores last-write-wins).
 
-    Example usage:
-
-    >>> redis_uri = "redis://localhost:6379/0"
-    >>> db = TinyDB(storage=RedisStorage, redis_uri=redis_uri)
-
-    :param redis_uri: The URI for the Redis connection.
-    :type redis_uri: str
-    :param kwargs: Additional keyword arguments to pass to the Redis connection.
-
-    .. note::
-       The `RedisStorage` class extends `Storage` from TinyDB and inherits its methods.
-
-    :versionadded: 1.0.0
-
-    :warning:
-       Ensure that the Redis server is running and accessible. Data may be lost upon Redis server restart.
-
-    :seealso: https://redis-py.readthedocs.io/
-
-    :param connection: The Redis connection object.
-    :type connection: redis.client.StrictRedis
+    >>> db = TinyDB(storage=RedisStorage, redis_uri="redis://localhost:6379/0")
     """
 
-    def __init__(self, redis_uri: str, **kwargs):
-        """
-        Initialize a new Redis storage.
-
-        :param redis_uri: The URI for the Redis connection.
-        :type redis_uri: str
-        :param kwargs: Additional keyword arguments to pass to the Redis connection.
-
-        .. versionadded:: 1.0.0
-           Added the `RedisStorage` class.
-
-        :warning:
-           Ensure that the Redis server is running and accessible. Data may be lost upon Redis server restart.
-
-        :seealso: https://redis-py.readthedocs.io/
-        """
-        self.prefix = kwargs.get("prefix", "tiny_db")
-        self.connection = redis.client.StrictRedis(
-            connection_pool=redis.ConnectionPool.from_url(redis_uri), **kwargs
+    def __init__(
+        self,
+        redis_uri: Optional[str] = None,
+        key: Optional[str] = None,
+        client: Optional[redis.Redis] = None,
+        check_conflicts: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        # Before 0.2.0 the key was `prefix`, which was also passed on to redis and failed there.
+        legacy_key = kwargs.pop("prefix", None)
+        self.key = key or legacy_key or DEFAULT_REDIS_KEY
+        if client is None and redis_uri is None:
+            raise ValueError("RedisStorage needs a redis_uri or a client")
+        self.owns_connection = client is None
+        self.connection = (
+            client if client is not None else redis.Redis.from_url(redis_uri, **kwargs)
         )
+        self.check_conflicts = check_conflicts
+        self._last_seen: Any = _UNREAD
 
-    def read(self) -> Optional[Dict[str, Dict[str, Any]]]:
-        """
-        Read data from Redis storage.
+    def read(self) -> Optional[JsonData]:
+        raw = self._as_text(self.connection.get(self.key))
+        self._last_seen = raw
+        return None if raw is None else json.loads(raw)
 
-        :return: Dictionary data from Redis storage.
-        :rtype: Dict[str, Any]
-        """
-        try:
-            resp = self.connection.get(self.prefix)
-            return json.loads(resp)
-        except Exception:
-            return {}
+    def write(self, data: JsonData) -> None:
+        payload = json.dumps(data)
+        if self.check_conflicts and self._last_seen is not _UNREAD:
+            self._write_if_unchanged(payload)
+        else:
+            self.connection.set(self.key, payload)
+        self._last_seen = payload
 
-    def write(self, data: Dict[str, Dict[str, Any]]):
-        """
-        Write all data to Redis storage.
+    def close(self) -> None:
+        if self.owns_connection:
+            self.connection.close()
 
-        :param data: Dictionary data to store in Redis.
-        :type data: Dict[str, Dict[str, Any]]
+    def _write_if_unchanged(self, payload: str) -> None:
+        with self.connection.pipeline() as pipe:
+            try:
+                pipe.watch(self.key)
+                if self._as_text(pipe.get(self.key)) != self._last_seen:
+                    raise self._conflict()
+                pipe.multi()
+                pipe.set(self.key, payload)
+                pipe.execute()
+            except redis.WatchError as e:
+                raise self._conflict() from e
 
-        :return: None
-        :rtype: None
-        """
-        self.connection.set(self.prefix, json.dumps(data))
-        return None
+    def _conflict(self) -> StorageConflictError:
+        return StorageConflictError(f"Redis key {self.key!r} changed since it was read")
 
-    def close(self):
-        """
-        Close the Redis connection.
+    @staticmethod
+    def _as_text(value: Union[bytes, str, None]) -> Optional[str]:
+        return value.decode() if isinstance(value, bytes) else value
 
-        :return: None
-        :rtype: None
-        """
-        self.connection.close()
+    def __repr__(self) -> str:
+        return f"RedisStorage(key={self.key!r})"

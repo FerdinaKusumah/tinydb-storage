@@ -1,103 +1,83 @@
 import json
-from typing import Optional, Dict, Any
+from typing import Any, Optional
 
 import boto3
 from botocore.exceptions import ClientError
 from tinydb.storages import Storage
 
-from tinydbstorage.schema import S3Schema
+from tinydbstorage.constants import (
+    JSON_CONTENT_TYPE,
+    S3_CONFLICT_CODES,
+    S3_MISSING_OBJECT_CODES,
+)
+from tinydbstorage.errors import StorageConflictError
+from tinydbstorage.schema.s3 import S3Schema
+
+JsonData = dict[str, dict[str, Any]]
+_UNREAD = object()
 
 
 class S3Storage(Storage):
-    """
-    Represents a storage implementation for TinyDB using Amazon S3.
+    """TinyDB storage that keeps the whole database as one JSON object in S3.
 
-    This class extends the `Storage` class from the TinyDB library.
+    A missing object reads as an empty database; any other error is raised.
+    Writes are conditional on the ETag last read (If-Match, or If-None-Match
+    for a new object), so a write fails with StorageConflictError instead of
+    overwriting another writer. `check_conflicts=False` disables that, for
+    S3-compatible services without conditional writes.
 
-    Example usage:
-
-    >>> s3_config = S3Schema(
-    ...     file_path="your/file/path",
-    ...     bucket_name="your-s3-bucket",
-    ...     region_name="your-region",
-    ...     access_key_id="your-access-key-id",
-    ...     secret_access_key="your-secret-access-key",
-    ... )
-    >>> db = TinyDB(storage=storage, config=s3_config)
-
-    :param config: The S3 configuration schema.
-    :type config: S3Schema
-
-    .. note::
-       The `S3Storage` class extends `Storage` from TinyDB and inherits its methods.
-
-    :versionadded: 1.0.0
-
-    :warning:
-       Ensure that the AWS credentials and S3 bucket information are correctly provided.
-
-    :seealso: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
-
-    :param bucket: The name of the S3 bucket.
-    :type bucket: str
-    :param file_path: The file path in the S3 bucket.
-    :type file_path: str
-    :param client: The S3 client from the `boto3` library.
-    :type client: boto3.resources.base.ServiceResource
+    >>> db = TinyDB(storage=S3Storage, config=S3Schema(bucket_name="foo", file_path="db.json"))
     """
 
-    def __init__(self, config: S3Schema):
-        """
-        Initialize a new Amazon S3 storage.
-
-        :param config: The S3 configuration schema.
-        :type config: S3Schema
-
-        .. versionadded:: 1.0.0
-           Added the `S3Storage` class.
-
-        :warning:
-           Ensure that the AWS credentials and S3 bucket information are correctly provided.
-
-        :seealso: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
-        """
+    def __init__(
+        self, config: S3Schema, client: Any = None, check_conflicts: bool = True
+    ) -> None:
         self.bucket = config.bucket_name
         self.file_path = config.file_path
-        self.client = boto3.resource(
-            "s3",
-            region_name=config.region_name,
-            aws_access_key_id=config.access_key_id,
-            aws_secret_access_key=config.secret_access_key,
+        self.client = (
+            client
+            if client is not None
+            else boto3.client("s3", **config.client_kwargs())
         )
+        self.check_conflicts = check_conflicts
+        self._etag: Any = _UNREAD
 
-    def read(self) -> Optional[Dict[str, Dict[str, Any]]]:
-        """
-        Read data from Amazon S3 storage.
-
-        :return: Dictionary data from S3 storage.
-        :rtype: Optional[Dict[str, Dict[str, Any]]]
-        """
+    def read(self) -> Optional[JsonData]:
         try:
-            cl = self.client.Object(self.bucket, self.file_path).get()
-            obj = cl["Body"].read()
-            if isinstance(obj, bytes):
-                return json.loads(obj.decode("utf-8"))
-
-            return obj
+            obj = self.client.get_object(Bucket=self.bucket, Key=self.file_path)
         except ClientError as e:
-            if e.response["Error"]["Code"] == "404":
-                return dict()
+            if self._code(e) not in S3_MISSING_OBJECT_CODES:
+                raise
+            self._etag = None
+            return None
+        self._etag = obj["ETag"]
+        return json.loads(obj["Body"].read())
 
-        return dict()
+    def write(self, data: JsonData) -> None:
+        try:
+            response = self.client.put_object(
+                Bucket=self.bucket,
+                Key=self.file_path,
+                Body=json.dumps(data).encode(),
+                ContentType=JSON_CONTENT_TYPE,
+                **self._precondition(),
+            )
+        except ClientError as e:
+            if self.check_conflicts and self._code(e) in S3_CONFLICT_CODES:
+                raise StorageConflictError(
+                    f"s3://{self.bucket}/{self.file_path} changed since it was read"
+                ) from e
+            raise
+        self._etag = response["ETag"]
 
-    def write(self, data: Dict[str, Any]):
-        """
-        Write all data to Amazon S3 storage.
+    def _precondition(self) -> dict[str, str]:
+        if not self.check_conflicts or self._etag is _UNREAD:
+            return {}
+        return {"IfMatch": self._etag} if self._etag else {"IfNoneMatch": "*"}
 
-        :param data: Dictionary data to store in S3.
-        :type data: Dict[str, Any]
+    @staticmethod
+    def _code(error: ClientError) -> str:
+        return str(error.response.get("Error", {}).get("Code", ""))
 
-        :return: None
-        :rtype: None
-        """
-        self.client.Object(self.bucket, self.file_path).put(Body=json.dumps(data))
+    def __repr__(self) -> str:
+        return f"S3Storage(s3://{self.bucket}/{self.file_path})"
