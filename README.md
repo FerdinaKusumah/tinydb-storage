@@ -96,6 +96,22 @@ except StorageConflictError:
 If your service doesn't support conditional writes, or you want the old last-write-wins behaviour, pass
 `check_conflicts=False` to the storage.
 
+## Joining tables across storages
+
+[tinydbjoin](https://github.com/FerdinaKusumah/tinydb-join) joins TinyDB tables in memory, wherever each one is stored,
+for example customers in Redis and orders in a local JSON file:
+
+```python
+from tinydb import TinyDB
+from tinydbjoin import Join
+from tinydbstorage.storage import RedisStorage
+
+customers = TinyDB(storage=RedisStorage, redis_uri="redis://localhost:6379/0").table("customers")
+orders = TinyDB("orders.json").table("orders")
+
+Join.inner(orders, customers, on=("customer_id", "id"))  # [(order, customer), ...]
+```
+
 ## Upgrading from 0.1
 
 * Install the extra you need (`tinydbstorage[redis]` or `[s3]`). Redis and boto3 are no longer installed by default, and
