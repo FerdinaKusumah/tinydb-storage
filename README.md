@@ -82,16 +82,30 @@ You can also pass your own boto3 S3 client with `client=`.
 ## Concurrent writers
 
 Two processes can share one database. If one writes after the other read, the second write raises
-`StorageConflictError` and nothing is overwritten. Retry the operation, which reads the latest data first:
+`StorageConflictError` and nothing is overwritten. Retry the operation, which reads the latest data first.
+
+An insert needs one more step. TinyDB remembers the next document ID per table, so when another process inserted
+first, the insert can also fail with `ValueError: Document with ID ... already exists`. Nothing is written in that
+case either. Retry inserts with a new `TinyDB`, which reads the IDs again:
 
 ```python
+import redis
+from tinydb import TinyDB
 from tinydbstorage import StorageConflictError
+from tinydbstorage.storage import RedisStorage
 
-try:
-    db.insert({"name": "John"})
-except StorageConflictError:
-    db.insert({"name": "John"})
+client = redis.Redis.from_url("redis://localhost:6379/0")
+
+for attempt in range(5):
+    try:
+        TinyDB(storage=RedisStorage, client=client).insert({"name": "John"})
+        break
+    except (StorageConflictError, ValueError):
+        if attempt == 4:
+            raise
 ```
+
+Updates and removes don't use the ID counter, so retrying them on the same `db` is enough.
 
 If your service doesn't support conditional writes, or you want the old last-write-wins behaviour, pass
 `check_conflicts=False` to the storage.

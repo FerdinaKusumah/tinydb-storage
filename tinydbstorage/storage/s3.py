@@ -51,7 +51,8 @@ class S3Storage(Storage):
             self._etag = None
             return None
         self._etag = obj["ETag"]
-        return json.loads(obj["Body"].read())
+        body = obj["Body"].read()
+        return json.loads(body) if body else None
 
     def write(self, data: JsonData) -> None:
         try:

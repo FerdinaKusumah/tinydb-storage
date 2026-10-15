@@ -44,7 +44,8 @@ class RedisStorage(Storage):
     def read(self) -> Optional[JsonData]:
         raw = self._as_text(self.connection.get(self.key))
         self._last_seen = raw
-        return None if raw is None else json.loads(raw)
+        # Empty reads as an empty database, as TinyDB's JSONStorage does with an empty file.
+        return json.loads(raw) if raw else None
 
     def write(self, data: JsonData) -> None:
         payload = json.dumps(data)

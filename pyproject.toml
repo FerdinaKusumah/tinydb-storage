@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tinydbstorage"
-version = "0.2.0"
+version = "0.2.1"
 description = "Redis and S3 storages for TinyDB that refuse to overwrite each other."
 authors = ["Ferdina Kusumah <ferdina.kusumah@gmail.com>"]
 license = "MIT"

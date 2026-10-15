@@ -150,3 +150,37 @@ class TestClient:
 
         with pytest.raises(ClientError):
             S3Storage(config(), client=Broken()).read()
+
+
+class TestUnusualStoredObjects:
+    def test_an_empty_object_is_an_empty_database(self, s3: Any) -> None:
+        s3.put_object(Bucket=BUCKET, Key=KEY, Body=b"")
+        db = open_db()
+        assert db.all() == []
+        db.insert({"name": "a"})
+        assert stored(s3) == {"_default": {"1": {"name": "a"}}}
+
+    def test_an_unreadable_object_raises_and_is_kept(self, s3: Any) -> None:
+        s3.put_object(Bucket=BUCKET, Key=KEY, Body=b"{broken")
+        with pytest.raises(json.JSONDecodeError):
+            open_db().insert({"name": "a"})
+        assert s3.get_object(Bucket=BUCKET, Key=KEY)["Body"].read() == b"{broken"
+
+    def test_unicode_round_trips(self, s3: Any) -> None:
+        open_db().insert({"name": "José 🚀 日本"})
+        assert open_db().all() == [{"name": "José 🚀 日本"}]
+
+    def test_a_missing_bucket_raises(self, s3: Any) -> None:
+        with pytest.raises(ClientError) as error:
+            TinyDB(storage=S3Storage, config=config(bucket_name="no-such-bucket")).all()
+        assert error.value.response["Error"]["Code"] == "NoSuchBucket"
+
+    def test_an_object_deleted_after_the_read_is_a_conflict(self, s3: Any) -> None:
+        db = open_db()
+        db.insert({"name": "a"})
+        db.all()
+        s3.delete_object(Bucket=BUCKET, Key=KEY)
+        with pytest.raises(StorageConflictError):
+            db.storage.write({"_default": {"1": {"name": "stale"}}})
+        with pytest.raises(ClientError):
+            s3.head_object(Bucket=BUCKET, Key=KEY)
