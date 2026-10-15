@@ -126,17 +126,6 @@ orders = TinyDB("orders.json").table("orders")
 Join.inner(orders, customers, on=("customer_id", "id"))  # [(order, customer), ...]
 ```
 
-## Upgrading from 0.1
-
-* Install the extra you need (`tinydbstorage[redis]` or `[s3]`). Redis and boto3 are no longer installed by default, and
-  pydantic and python-dateutil are no longer dependencies.
-* Read errors are raised instead of returning an empty database, and conflicting writes raise `StorageConflictError`.
-* `RedisStorage(prefix=...)` still works and sets the key; prefer `key=`.
-* `S3Schema` is a frozen dataclass. `S3Schema(...)` and `S3Schema.from_param(...)` work as before, and the credentials
-  are now optional.
-* `MemoryStorage` and `FileStorage` are deprecated, because TinyDB ships them: use `tinydb.storages.MemoryStorage` and
-  `tinydb.storages.JSONStorage`.
-
 ## Development
 
 ```shell
