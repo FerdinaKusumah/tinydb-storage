@@ -1,4 +1,5 @@
 import json
+import threading
 from unittest import mock
 
 import fakeredis
@@ -153,3 +154,104 @@ class TestClose:
             repr(RedisStorage(redis_uri="redis://localhost:6379/1", key="app"))
             == "RedisStorage(key='app')"
         )
+
+
+class TestUnusualStoredValues:
+    def test_an_empty_value_is_an_empty_database(
+        self, server: fakeredis.FakeServer
+    ) -> None:
+        client(server).set("tiny_db", "")
+        db = open_db(server)
+        assert db.all() == []
+        db.insert({"name": "a"})
+        assert open_db(server).all() == [{"name": "a"}]
+
+    @pytest.mark.parametrize(
+        ("stored_value", "error"),
+        [
+            ("{broken", json.JSONDecodeError),
+            (b"\xff\xfe", UnicodeDecodeError),
+        ],
+    )
+    def test_an_unreadable_value_raises_and_is_kept(
+        self, server: fakeredis.FakeServer, stored_value: object, error: type
+    ) -> None:
+        client(server).set("tiny_db", stored_value)
+        with pytest.raises(error):
+            open_db(server).insert({"name": "a"})
+        assert client(server).get("tiny_db") == (
+            stored_value if isinstance(stored_value, bytes) else stored_value.encode()
+        )
+
+    def test_a_key_of_another_type_raises(self, server: fakeredis.FakeServer) -> None:
+        client(server).hset("tiny_db", "field", "value")
+        with pytest.raises(redis.ResponseError):
+            open_db(server).all()
+
+    def test_unicode_round_trips(self, server: fakeredis.FakeServer) -> None:
+        open_db(server).insert({"name": "José 🚀 日本"})
+        assert open_db(server).all() == [{"name": "José 🚀 日本"}]
+
+    def test_a_value_json_cannot_hold_fails_before_writing(
+        self, server: fakeredis.FakeServer
+    ) -> None:
+        client(server).set("tiny_db", json.dumps(SEEDED))
+        with pytest.raises(TypeError):
+            open_db(server).insert({"name": object()})
+        assert json.loads(client(server).get("tiny_db")) == SEEDED
+
+
+class TestOtherWriters:
+    def test_a_key_deleted_after_the_read_is_a_conflict(
+        self, server: fakeredis.FakeServer
+    ) -> None:
+        db = open_db(server)
+        db.insert({"name": "a"})
+        db.all()
+        client(server).delete("tiny_db")
+        with pytest.raises(StorageConflictError):
+            db.storage.write({"_default": {"1": {"name": "stale"}}})
+        assert not client(server).exists("tiny_db")
+
+    def test_a_key_created_after_reading_it_missing_is_a_conflict(
+        self, server: fakeredis.FakeServer
+    ) -> None:
+        db = open_db(server)
+        assert db.all() == []
+        client(server).set("tiny_db", json.dumps(SEEDED))
+        with pytest.raises(StorageConflictError):
+            db.storage.write({"_default": {"1": {"name": "c"}}})
+        assert json.loads(client(server).get("tiny_db")) == SEEDED
+
+    def test_a_cached_document_id_taken_by_another_writer_raises(
+        self, server: fakeredis.FakeServer
+    ) -> None:
+        # TinyDB caches the next ID per table, which is why the README retries with a new TinyDB.
+        first, second = open_db(server), open_db(server)
+        second.insert({"name": "b1"})
+        first.insert({"name": "a1"})
+        with pytest.raises(ValueError, match="already exists"):
+            second.insert({"name": "b2"})
+        assert [d["name"] for d in open_db(server).all()] == ["b1", "a1"]
+
+    def test_concurrent_writers_retrying_as_the_readme_says_lose_nothing(
+        self, server: fakeredis.FakeServer
+    ) -> None:
+        writers, inserts = 4, 25
+
+        def write(writer: int) -> None:
+            for n in range(inserts):
+                while True:
+                    try:
+                        open_db(server).insert({"writer": writer, "n": n})
+                        break
+                    except (StorageConflictError, ValueError):
+                        continue
+
+        threads = [threading.Thread(target=write, args=(w,)) for w in range(writers)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        stored = {(d["writer"], d["n"]) for d in open_db(server).all()}
+        assert stored == {(w, n) for w in range(writers) for n in range(inserts)}
